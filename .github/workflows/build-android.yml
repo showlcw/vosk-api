@@ -1,0 +1,158 @@
+name: Build libvosk for Android
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - '.github/workflows/build-android.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, x86]   # 需要其它 ABI 可加: armeabi-v7a, x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake libtool gawk sox swig \
+            python3-dev python3-numpy \
+            cmake ninja-build build-essential curl git
+
+      - name: Setup NDK r25b (25.1.8937393)
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25b
+
+      - name: Build native deps and libvosk (${{ matrix.abi }})
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ABI=${{ matrix.abi }}
+          ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$NDK_HOME}"
+          PREBUILT="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+          export PATH="$PREBUILT/bin:$PATH"
+
+          case "$ABI" in
+            arm64-v8a) HOST=aarch64-linux-android; TARGET=ARMV8; API=21 ;;
+            x86)       HOST=i686-linux-android;    TARGET=ATOM;  API=21 ;;
+            *) echo "Unsupported ABI: $ABI"; exit 1 ;;
+          esac
+
+          export CC=${HOST}${API}-clang
+          export CXX=${HOST}${API}-clang++
+          export AR=llvm-ar
+          export RANLIB=llvm-ranlib
+          export CXXFLAGS="-O3 -DFST_NO_DYNAMIC_LINKING -fPIC"
+          export WORK="$GITHUB_WORKSPACE/android/lib/build/${ABI}"
+          mkdir -p "$WORK" && cd "$WORK"
+
+          # ---------- OpenBLAS (CMake/Ninja, shared) ----------
+          if [ ! -d OpenBLAS ]; then
+            git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
+          fi
+          mkdir -p openblas-build && cd openblas-build
+          cmake -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI="$ABI" \
+            -DANDROID_PLATFORM=21 \
+            -DBUILD_SHARED_LIBS=ON \
+            -DNOFORTRAN=ON \
+            -DDYNAMIC_ARCH=OFF \
+            -DTARGET="$TARGET" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$WORK/local" \
+            ../OpenBLAS
+          ninja -j"$(nproc)"
+          ninja install
+          cd "$WORK"
+
+          # ---------- OpenFST 1.8.0 (static) ----------
+          curl -L -o openfst-1.8.0.tar.gz https://www.openfst.org/twiki/pub/FST/FstDownload/openfst-1.8.0.tar.gz
+          tar xf openfst-1.8.0.tar.gz
+          cd openfst-1.8.0
+          # 预置交叉编译检测（避免“cannot run test program while cross compiling”）
+          export ac_cv_func_malloc_0_nonnull=yes
+          export ac_cv_func_realloc_0_nonnull=yes
+          export ac_cv_c_bigendian=no
+          export ac_cv_header_inttypes_h=yes
+          export ac_cv_header_memory_h=yes
+          export ac_cv_header_stdint_h=yes
+          export ac_cv_header_stdc=yes
+          export ac_cv_have_decl_malloc=yes
+          export ac_cv_func_mmap_fixed_mapped=yes
+          export ac_cv_func_posix_fallocate=no
+          ./configure \
+            --host="$HOST" \
+            --build="$(/usr/bin/sh config.guess)" \
+            --prefix="$WORK/local" \
+            --disable-bin \
+            --enable-static \
+            --disable-shared \
+            --with-pic \
+            --enable-lookahead-fsts \
+            --enable-ngram-fsts
+          make -j"$(nproc)"
+          make install
+          cd "$WORK"
+
+          # ---------- Kaldi (vosk-android 分支，静态库) ----------
+          if [ ! -d kaldi ]; then
+            git clone -b vosk-android --single-branch https://github.com/alphacep/kaldi
+          fi
+          cd kaldi/src
+          CXX=${CXX} AR=${AR} RANLIB=${RANLIB} \
+          CXXFLAGS="${CXXFLAGS}" \
+          ./configure --use-cuda=no --mathlib=OPENBLAS_CLAPACK \
+            --host="$HOST" \
+            --openblas-root="$WORK/local" \
+            --fst-root="$WORK/local" \
+            --fst-version=1.8.0 \
+            --android-incdir="$PREBUILT/sysroot/usr/include"
+          make -j"$(nproc)" online2 rnnlm
+          cd "$WORK"
+
+          # ---------- libvosk.so ----------
+          mkdir -p "$WORK/vosk" "$GITHUB_WORKSPACE/android/lib/src/main/jniLibs/$ABI"
+          make -C "$GITHUB_WORKSPACE/src" \
+            OUTDIR="$WORK/vosk" \
+            KALDI_ROOT="$WORK/kaldi" \
+            OPENFST_ROOT="$WORK/local" \
+            OPENBLAS_ROOT="$WORK/local" \
+            CXX="$CXX" \
+            'EXTRA_LDFLAGS=-llog -static-libstdc++ -Wl,-soname,libvosk.so '
+          cp "$WORK/vosk/libvosk.so" "$GITHUB_WORKSPACE/android/lib/src/main/jniLibs/$ABI/libvosk.so"
+
+      - name: Upload jniLibs (${{ matrix.abi }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: jniLibs-${{ matrix.abi }}
+          path: android/lib/src/main/jniLibs/${{ matrix.abi }}/libvosk.so
+
+  aar:
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: jniLibs-*
+          path: android/lib/src/main/jniLibs
+          merge-multiple: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Build AAR
+        working-directory: android
+        run: ./gradlew :lib:assembleRelease
+      - name: Upload AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: vosk-android-aar
+          path: android/lib/build/outputs/aar/*.aar
