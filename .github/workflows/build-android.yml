@@ -22,7 +22,7 @@ jobs:
       - name: Set up NDK
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r25b  # 你可以改成固定版本 r25b, r26, r27 等
+          ndk-version: r27b
 
       - name: Prepare environment
         run: |
@@ -31,6 +31,9 @@ jobs:
           echo "ABI=${{ matrix.abi }}" >> $GITHUB_ENV
           echo "WORK=$GITHUB_WORKSPACE/android/lib/build/${{ matrix.abi }}" >> $GITHUB_ENV
           mkdir -p $GITHUB_WORKSPACE/android/lib/build/${{ matrix.abi }}
+          
+          # Add NDK toolchain to PATH
+          echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: Build OpenBLAS
         run: |
@@ -41,7 +44,7 @@ jobs:
 
           # 克隆 OpenBLAS
           if [ ! -d OpenBLAS ]; then
-            git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
+            git clone -b v0.3.21 --single-branch https://github.com/xianyi/OpenBLAS
           fi
 
           # ABI 对应 TARGET
@@ -57,7 +60,7 @@ jobs:
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=$ABI \
-            -DANDROID_PLATFORM=21 \
+            -DANDROID_PLATFORM=android-21 \
             -DBUILD_SHARED_LIBS=OFF \
             -DNOFORTRAN=ON \
             -DDYNAMIC_ARCH=OFF \
@@ -65,7 +68,9 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$WORK/local" \
             -DBUILD_TESTING=OFF \
-            -DNO_CBLAS=ON
+            -DNO_CBLAS=ON \
+            -DNO_LAPACK=ON \
+            -DNO_LAPACKE=ON
 
           ninja -C "$WORK/openblas-build" -j8
           ninja -C "$WORK/openblas-build" install
@@ -94,22 +99,22 @@ jobs:
           case "$ABI" in
             arm64-v8a) 
               HOST=aarch64-linux-android
-              CC=aarch64-linux-android21-clang
+              CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang
               ARCHFLAGS=""
               ;;
             armeabi-v7a) 
               HOST=arm-linux-androideabi
-              CC=armv7a-linux-androideabi21-clang
+              CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang
               ARCHFLAGS="-mfloat-abi=softfp -mfpu=neon"
               ;;
             x86) 
               HOST=i686-linux-android
-              CC=i686-linux-android21-clang
+              CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang
               ARCHFLAGS=""
               ;;
             x86_64) 
               HOST=x86_64-linux-android
-              CC=x86_64-linux-android21-clang
+              CC=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang
               ARCHFLAGS=""
               ;;
           esac
@@ -142,22 +147,22 @@ jobs:
           case "$ABI" in
             arm64-v8a) 
               HOST=aarch64-linux-android
-              CXX=aarch64-linux-android21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++
               ARCHFLAGS=""
               ;;
             armeabi-v7a) 
               HOST=arm-linux-androideabi
-              CXX=armv7a-linux-androideabi21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang++
               ARCHFLAGS="-mfloat-abi=softfp -mfpu=neon"
               ;;
             x86) 
               HOST=i686-linux-android
-              CXX=i686-linux-android21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang++
               ARCHFLAGS=""
               ;;
             x86_64) 
               HOST=x86_64-linux-android
-              CXX=x86_64-linux-android21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++
               ARCHFLAGS=""
               ;;
           esac
@@ -185,28 +190,28 @@ jobs:
           case "$ABI" in
             arm64-v8a) 
               HOST=aarch64-linux-android
-              CXX=aarch64-linux-android21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++
               ARCHFLAGS=""
               ;;
             armeabi-v7a) 
               HOST=arm-linux-androideabi
-              CXX=armv7a-linux-androideabi21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang++
               ARCHFLAGS="-mfloat-abi=softfp -mfpu=neon"
               ;;
             x86) 
               HOST=i686-linux-android
-              CXX=i686-linux-android21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang++
               ARCHFLAGS=""
               ;;
             x86_64) 
               HOST=x86_64-linux-android
-              CXX=x86_64-linux-android21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++
               ARCHFLAGS=""
               ;;
           esac
           
           cd $WORK/kaldi/src
-          CXX=$CXX AR=llvm-ar RANLIB=llvm-ranlib CXXFLAGS="$ARCHFLAGS -O3 -DFST_NO_DYNAMIC_LINKING" ./configure --use-cuda=no \
+          CXX=$CXX AR=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar RANLIB=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib CXXFLAGS="$ARCHFLAGS -O3 -DFST_NO_DYNAMIC_LINKING" ./configure --use-cuda=no \
             --mathlib=OPENBLAS_CLAPACK --shared \
             --android-incdir=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include \
             --host=$HOST --openblas-root=${WORK}/local \
@@ -224,19 +229,19 @@ jobs:
           # 设置编译器变量
           case "$ABI" in
             arm64-v8a) 
-              CXX=aarch64-linux-android21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++
               PAGESIZE_LDFLAGS="-Wl,-z,common-page-size=4096 -Wl,-z,max-page-size=16384"
               ;;
             armeabi-v7a) 
-              CXX=armv7a-linux-androideabi21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang++
               PAGESIZE_LDFLAGS=""
               ;;
             x86) 
-              CXX=i686-linux-android21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang++
               PAGESIZE_LDFLAGS=""
               ;;
             x86_64) 
-              CXX=x86_64-linux-android21-clang++
+              CXX=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++
               PAGESIZE_LDFLAGS=""
               ;;
           esac
