@@ -11,7 +11,7 @@ android {
         versionCode 10
         versionName = version
         archivesBaseName = archiveName
-        ndkVersion = "25.2.9519653"
+        ndkVersion = "27.3.13750724"
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
