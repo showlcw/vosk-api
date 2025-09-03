@@ -69,3 +69,19 @@ c/test_vosk_speaker
 c/oprofile_data
 c/model
 c/test.wav
+
+# Build system artifacts
+build/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+*.cmake
+compile_commands.json
+
+# Temporary files
+.DS_Store
+*~
+*.swp
+*.tmp
