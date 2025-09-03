@@ -29,9 +29,11 @@ cmake_install.cmake
 wheelhouse
 __pycache__
 *.egg-info
+.eggs/
 python/dist
 python/build
 python/vosk/*.so
+python/vosk/vosk_cffi.py
 python/test/db
 python/test/hyp
 python/test/model
@@ -69,3 +71,19 @@ c/test_vosk_speaker
 c/oprofile_data
 c/model
 c/test.wav
+
+# Build system artifacts
+build/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+*.cmake
+compile_commands.json
+
+# Temporary files
+.DS_Store
+*~
+*.swp
+*.tmp

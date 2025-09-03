@@ -21,6 +21,22 @@ transcription for lectures and interviews.
 Vosk scales from small devices like Raspberry Pi or Android smartphone to
 big clusters.
 
+# Quick Build
+
+Get started with vosk-api in one command:
+
+```bash
+# Download and build with optimal settings
+./build.sh
+
+# Or build specific components
+./build.sh --python --wheel          # Python wheel package
+./build.sh --java --csharp           # Multiple language bindings  
+./build.sh --config Debug --test     # Debug build with tests
+```
+
+See [BUILD.md](BUILD.md) for complete build documentation.
+
 # Documentation
 
 For installation instructions, examples and documentation visit [Vosk
