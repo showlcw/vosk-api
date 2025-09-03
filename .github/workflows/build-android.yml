@@ -22,7 +22,7 @@ jobs:
       - name: Set up NDK
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r25b  # 你可以改成固定版本 r25b, r26, r27 等
+          ndk-version: r27c
 
       - name: Prepare environment
         run: |
@@ -30,6 +30,12 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
           echo "ABI=${{ matrix.abi }}" >> $GITHUB_ENV
           echo "WORK=$GITHUB_WORKSPACE/android/lib/build/${{ matrix.abi }}" >> $GITHUB_ENV
+          # Add NDK tools to PATH
+          echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+          # Verify NDK setup
+          ls -la $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/ | head -10
+          echo "NDK version:"
+          cat $ANDROID_NDK_HOME/source.properties || echo "No source.properties found"
           mkdir -p $GITHUB_WORKSPACE/android/lib/build/${{ matrix.abi }}
 
       - name: Build OpenBLAS
