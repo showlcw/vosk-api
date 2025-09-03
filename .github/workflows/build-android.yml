@@ -67,6 +67,7 @@ jobs:
             -DTARGET="$TARGET" \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$WORK/local" \
+            -DBUILD_TESTING=OFF
             ../OpenBLAS
           ninja -j"$(nproc)"
           ninja install
