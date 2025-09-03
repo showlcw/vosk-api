@@ -52,7 +52,7 @@ jobs:
             x86_64) TARGET=NEHALEM ;;
           esac
 
-          # 使用 CMAKE 但配置 NO_CBLAS=ON 以避免utest编译问题
+          # 启用 CBLAS 因为 Kaldi 需要 cblas.h 头文件，禁用 3M 内核避免缺失文件问题
           cmake -S "$WORK/OpenBLAS" -B "$WORK/openblas-build" \
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
@@ -65,10 +65,11 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$WORK/local" \
             -DBUILD_TESTING=OFF \
-            -DNO_CBLAS=ON
+            -DNO_CBLAS=OFF \
+            -DBUILD_WITHOUT_LAPACK=ON
 
-          ninja -C "$WORK/openblas-build" -j8
-          ninja -C "$WORK/openblas-build" install
+          ninja -C "$WORK/openblas-build" -j8 || { echo "OpenBLAS build failed for $ABI"; exit 1; }
+          ninja -C "$WORK/openblas-build" install || { echo "OpenBLAS install failed for $ABI"; exit 1; }
 
       - name: Verify OpenBLAS
         run: |
@@ -242,13 +243,22 @@ jobs:
           esac
           
           mkdir -p $WORK/vosk
+          
+          # 构建 Vosk 库，确保包含 Android 宏定义
           make -j 8 -C $GITHUB_WORKSPACE/src \
             OUTDIR=$WORK/vosk \
             KALDI_ROOT=${WORK}/kaldi \
             OPENFST_ROOT=${WORK}/local \
             OPENBLAS_ROOT=${WORK}/local \
             CXX=$CXX \
-            EXTRA_LDFLAGS="-llog -static-libstdc++ -Wl,-soname,libvosk.so ${PAGESIZE_LDFLAGS}"
+            EXTRA_CFLAGS="-D__ANDROID__" \
+            EXTRA_LDFLAGS="-llog -static-libstdc++ -Wl,-soname,libvosk.so ${PAGESIZE_LDFLAGS}" || { echo "Vosk build failed for $ABI"; exit 1; }
+          
+          # 验证生成的库
+          if [ ! -f "$WORK/vosk/libvosk.so" ]; then
+            echo "ERROR: libvosk.so was not generated for $ABI"
+            exit 1
+          fi
           
           # 复制到 JNI 目录
           mkdir -p $GITHUB_WORKSPACE/android/lib/src/main/jniLibs/$ABI
