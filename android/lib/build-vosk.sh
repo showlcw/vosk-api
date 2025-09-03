@@ -151,7 +151,15 @@ make -j 8 -C ${WORKDIR_BASE}/../../src \
     OPENFST_ROOT=${WORKDIR}/local \
     OPENBLAS_ROOT=${WORKDIR}/local \
     CXX=$CXX \
+    EXTRA_CFLAGS="-D__ANDROID__" \
     EXTRA_LDFLAGS="-llog -static-libstdc++ -Wl,-soname,libvosk.so ${PAGESIZE_LDFLAGS}"
+
+# 验证生成的库
+if [ ! -f "$WORKDIR/vosk/libvosk.so" ]; then
+  echo "ERROR: libvosk.so was not generated for $arch"
+  exit 1
+fi
+
 cp $WORKDIR/vosk/libvosk.so $WORKDIR/../../src/main/jniLibs/$arch/libvosk.so
 
 done
