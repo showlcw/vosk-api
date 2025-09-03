@@ -42,10 +42,10 @@ This repository now includes a complete build system for generating Android .so 
 
 ### Supported Architectures
 
-- `arm64-v8a` - 64-bit ARM (modern Android devices)
-- `armeabi-v7a` - 32-bit ARM (older Android devices)
-- `x86_64` - 64-bit Intel (emulators, some tablets)
-- `x86` - 32-bit Intel (older emulators)
+- `arm64-v8a` - 64-bit ARM (modern Android devices) ✅
+- `armeabi-v7a` - 32-bit ARM (older Android devices) ✅
+
+*Note: x86 and x86_64 support is currently disabled due to OpenBLAS compilation issues. See [TODO-x86-support.md](TODO-x86-support.md) for details.*
 
 ### Documentation
 

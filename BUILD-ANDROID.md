@@ -12,10 +12,10 @@ This document explains how to build Vosk-API for Android to generate .so files f
 ## Architecture Support
 
 The build system supports the following Android architectures:
-- `arm64-v8a` (64-bit ARM)
-- `armeabi-v7a` (32-bit ARM)
-- `x86_64` (64-bit Intel)
-- `x86` (32-bit Intel)
+- `arm64-v8a` (64-bit ARM) ✅
+- `armeabi-v7a` (32-bit ARM) ✅
+
+*Note: x86 and x86_64 support is temporarily disabled due to OpenBLAS compilation issues. ARM architectures cover the majority of Android devices.*
 
 ## Build Process
 

@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        abi: [arm64-v8a, armeabi-v7a, x86, x86_64]
+        abi: [arm64-v8a, armeabi-v7a]  # 暂时只构建ARM架构
 
     steps:
       - name: Checkout
@@ -48,11 +48,10 @@ jobs:
           case "$ABI" in
             arm64-v8a) TARGET=ARMV8 ;;
             armeabi-v7a) TARGET=ARMV7 ;;
-            x86) TARGET=ATOM ;;
-            x86_64) TARGET=NEHALEM ;;
           esac
 
-          # 使用 CMAKE 但配置 NO_CBLAS=ON 以避免utest编译问题
+          echo "Building OpenBLAS for ARM architecture using CMake..."
+          # 使用 CMAKE 配置，ARM 架构
           cmake -S "$WORK/OpenBLAS" -B "$WORK/openblas-build" \
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
@@ -65,7 +64,9 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$WORK/local" \
             -DBUILD_TESTING=OFF \
-            -DNO_CBLAS=ON
+            -DNO_CBLAS=ON \
+            -DNO_LAPACK=ON \
+            -DNO_LAPACKE=ON
 
           ninja -C "$WORK/openblas-build" -j8
           ninja -C "$WORK/openblas-build" install
@@ -289,8 +290,8 @@ jobs:
       - name: Copy .so files to jniLibs
         run: |
           set -euxo pipefail
-          # 复制所有架构的 .so 文件到正确位置
-          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+          # 复制ARM架构的 .so 文件到正确位置
+          for abi in arm64-v8a armeabi-v7a; do
             mkdir -p android/lib/src/main/jniLibs/$abi
             if [ -f artifacts/vosk-android-$abi/libvosk.so ]; then
               cp artifacts/vosk-android-$abi/libvosk.so android/lib/src/main/jniLibs/$abi/
