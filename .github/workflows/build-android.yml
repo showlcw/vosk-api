@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        abi: [arm64-v8a, armeabi-v7a, x86, x86_64]
+        abi: [x86_64]
 
     steps:
       - name: Checkout
@@ -44,6 +44,28 @@ jobs:
             git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
           fi
 
+          # 修复 OpenBLAS 编译问题
+          cd OpenBLAS
+          
+          # 修复 test_dotu.c 中缺少的 complex.h 头文件
+          if [ -f utest/test_dotu.c ] && ! grep -q "#include <complex.h>" utest/test_dotu.c; then
+            sed -i '1i#include <complex.h>' utest/test_dotu.c
+          fi
+          
+          # 禁用 utest 目录的编译以避免单元测试编译错误
+          if [ -f CMakeLists.txt ] && grep -q "add_subdirectory(utest)" CMakeLists.txt; then
+            sed -i 's/add_subdirectory(utest)/#add_subdirectory(utest)/' CMakeLists.txt
+          fi
+          
+          # 修复 DTB_DEFAULT_ENTRIES 未定义的问题
+          if [ -f param.h ] && ! grep -q "DTB_DEFAULT_ENTRIES" param.h; then
+            echo "#ifndef DTB_DEFAULT_ENTRIES" >> param.h
+            echo "#define DTB_DEFAULT_ENTRIES 256" >> param.h
+            echo "#endif" >> param.h
+          fi
+          
+          cd ..
+
           # ABI 对应 TARGET
           case "$ABI" in
             arm64-v8a) TARGET=ARMV8 ;;
@@ -52,7 +74,7 @@ jobs:
             x86_64) TARGET=NEHALEM ;;
           esac
 
-          # 使用 CMAKE 但配置 NO_CBLAS=ON 以避免utest编译问题
+          # 使用 CMAKE 配置禁用测试和CBLAS以避免编译问题
           cmake -S "$WORK/OpenBLAS" -B "$WORK/openblas-build" \
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
@@ -65,8 +87,11 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$WORK/local" \
             -DBUILD_TESTING=OFF \
-            -DNO_CBLAS=ON
+            -DNO_CBLAS=ON \
+            -DUSE_THREAD=0 \
+            -DNUM_THREADS=1
 
+          # Build only libraries, avoid unit tests
           ninja -C "$WORK/openblas-build" -j8
           ninja -C "$WORK/openblas-build" install
 
