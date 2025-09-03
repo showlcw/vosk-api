@@ -86,7 +86,7 @@ mkdir -p $WORKDIR/local/lib
 cd $WORKDIR
 git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
 
-# 使用 CMake 构建 OpenBLAS 以避免兼容性问题
+# 使用 CMake 构建 OpenBLAS，启用 CBLAS 因为 Kaldi 需要 cblas.h，禁用 LAPACK 避免缺失文件问题
 cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
   -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
@@ -99,7 +99,8 @@ cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$WORKDIR/local" \
   -DBUILD_TESTING=OFF \
-  -DNO_CBLAS=ON
+  -DNO_CBLAS=OFF \
+  -DBUILD_WITHOUT_LAPACK=ON
 
 ninja -C "$WORKDIR/openblas-build" -j 8
 ninja -C "$WORKDIR/openblas-build" install
@@ -144,7 +145,7 @@ make -j 8 online2 rnnlm
 # Vosk-api
 cd $WORKDIR
 mkdir -p $WORKDIR/vosk
-make -j 8 -C ${WORKDIR_BASE}/../../../src \
+make -j 8 -C ${WORKDIR_BASE}/../../src \
     OUTDIR=$WORKDIR/vosk \
     KALDI_ROOT=${WORKDIR}/kaldi \
     OPENFST_ROOT=${WORKDIR}/local \

@@ -52,7 +52,7 @@ jobs:
             x86_64) TARGET=NEHALEM ;;
           esac
 
-          # 使用 CMAKE 但配置 NO_CBLAS=ON 以避免utest编译问题
+          # 启用 CBLAS 因为 Kaldi 需要 cblas.h 头文件，禁用 3M 内核避免缺失文件问题
           cmake -S "$WORK/OpenBLAS" -B "$WORK/openblas-build" \
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
@@ -65,7 +65,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$WORK/local" \
             -DBUILD_TESTING=OFF \
-            -DNO_CBLAS=ON
+            -DNO_CBLAS=OFF \
+            -DBUILD_WITHOUT_LAPACK=ON
 
           ninja -C "$WORK/openblas-build" -j8
           ninja -C "$WORK/openblas-build" install
