@@ -46,6 +46,7 @@ case $arch in
           CXX=armv7a-linux-androideabi21-clang++
           ARCHFLAGS="-mfloat-abi=softfp -mfpu=neon"
           PAGESIZE_LDFLAGS=""
+          BINARY=32
           ;;
     arm64-v8a)
           BLAS_ARCH=ARMV8
@@ -57,9 +58,10 @@ case $arch in
           ARCHFLAGS=""
           # Ensure compatibility with 16KiB page size devices
           PAGESIZE_LDFLAGS="-Wl,-z,common-page-size=4096 -Wl,-z,max-page-size=16384"
+          BINARY=64
           ;;
     x86_64)
-          BLAS_ARCH=NEHALEM
+          BLAS_ARCH=GENERIC
           HOST=x86_64-linux-android
           AR=llvm-ar
           RANLIB=llvm-ranlib
@@ -67,9 +69,10 @@ case $arch in
           CXX=x86_64-linux-android21-clang++
           ARCHFLAGS=""
           PAGESIZE_LDFLAGS=""
+          BINARY=64
           ;;
     x86)
-          BLAS_ARCH=ATOM
+          BLAS_ARCH=GENERIC
           HOST=i686-linux-android
           AR=llvm-ar
           RANLIB=llvm-ranlib
@@ -77,6 +80,7 @@ case $arch in
           CXX=i686-linux-android21-clang++
           ARCHFLAGS=""
           PAGESIZE_LDFLAGS=""
+          BINARY=32
           ;;
 esac
 
@@ -85,6 +89,18 @@ mkdir -p $WORKDIR/local/lib
 # openblas first
 cd $WORKDIR
 git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
+
+# 创建一个简单的patch来修复DTB_DEFAULT_ENTRIES问题
+cd $WORKDIR/OpenBLAS
+
+# 为x86架构添加DTB_DEFAULT_ENTRIES定义
+if [[ "$arch" == "x86" || "$arch" == "x86_64" ]]; then
+  find kernel -name "*.c" -exec grep -l "DTB_DEFAULT_ENTRIES" {} \; | while read file; do
+    if ! grep -q "#ifndef DTB_DEFAULT_ENTRIES" "$file"; then
+      sed -i '1i#ifndef DTB_DEFAULT_ENTRIES\n#define DTB_DEFAULT_ENTRIES 8\n#endif\n' "$file"
+    fi
+  done
+fi
 
 # 使用 CMake 构建 OpenBLAS 以避免兼容性问题
 cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
@@ -99,7 +115,11 @@ cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$WORKDIR/local" \
   -DBUILD_TESTING=OFF \
-  -DNO_CBLAS=ON
+  -DNO_CBLAS=ON \
+  -DNO_LAPACK=ON \
+  -DNO_LAPACKE=ON \
+  -DCMAKE_C_FLAGS="-DDTB_DEFAULT_ENTRIES=8" \
+  -DCMAKE_CXX_FLAGS="-DDTB_DEFAULT_ENTRIES=8"
 
 ninja -C "$WORKDIR/openblas-build" -j 8
 ninja -C "$WORKDIR/openblas-build" install
