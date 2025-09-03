@@ -52,18 +52,21 @@ jobs:
             x86_64) TARGET=NEHALEM ;;
           esac
 
+          # 使用 CMAKE 但配置 ONLY_CBLAS=1 并禁用测试
           cmake -S "$WORK/OpenBLAS" -B "$WORK/openblas-build" \
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=$ABI \
             -DANDROID_PLATFORM=21 \
-            -DBUILD_SHARED_LIBS=ON \
+            -DBUILD_SHARED_LIBS=OFF \
             -DNOFORTRAN=ON \
             -DDYNAMIC_ARCH=OFF \
             -DTARGET=$TARGET \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$WORK/local" \
-            -DBUILD_TESTING=OFF
+            -DBUILD_TESTING=OFF \
+            -DUTEST=OFF \
+            -DONLY_CBLAS=1
 
           ninja -C "$WORK/openblas-build" -j8
           ninja -C "$WORK/openblas-build" install
@@ -76,5 +79,245 @@ jobs:
           ls -lh $WORK/local/lib | head -20
           ls -lh $WORK/local/include | head -20
 
-      # TODO: 后续步骤编译 OpenFST、Kaldi、Vosk
-      # 目前你可以先确认 OpenBLAS 四个 ABI 都能构建成功
+      - name: Build CLAPACK
+        run: |
+          set -euxo pipefail
+          ABI=${{ matrix.abi }}
+          WORK=$GITHUB_WORKSPACE/android/lib/build/$ABI
+          cd $WORK
+          
+          # 克隆 CLAPACK
+          if [ ! -d clapack ]; then
+            git clone -b v3.2.1 --single-branch https://github.com/alphacep/clapack
+          fi
+          
+          # 设置编译器变量
+          case "$ABI" in
+            arm64-v8a) 
+              HOST=aarch64-linux-android
+              CC=aarch64-linux-android21-clang
+              ARCHFLAGS=""
+              ;;
+            armeabi-v7a) 
+              HOST=arm-linux-androideabi
+              CC=armv7a-linux-androideabi21-clang
+              ARCHFLAGS="-mfloat-abi=softfp -mfpu=neon"
+              ;;
+            x86) 
+              HOST=i686-linux-android
+              CC=i686-linux-android21-clang
+              ARCHFLAGS=""
+              ;;
+            x86_64) 
+              HOST=x86_64-linux-android
+              CC=x86_64-linux-android21-clang
+              ARCHFLAGS=""
+              ;;
+          esac
+          
+          mkdir -p clapack/BUILD && cd clapack/BUILD
+          cmake -DCMAKE_C_FLAGS="$ARCHFLAGS" -DCMAKE_C_COMPILER_TARGET=$HOST \
+            -DCMAKE_C_COMPILER=$CC -DCMAKE_SYSTEM_NAME=Generic \
+            -DCMAKE_AR=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar \
+            -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+            -DCMAKE_CROSSCOMPILING=True ..
+          make -j 8 -C F2CLIBS/libf2c
+          make -j 8 -C BLAS/SRC  
+          make -j 8 -C SRC
+          find . -name "*.a" | xargs cp -t $WORK/local/lib
+
+      - name: Build OpenFST
+        run: |
+          set -euxo pipefail
+          ABI=${{ matrix.abi }}
+          WORK=$GITHUB_WORKSPACE/android/lib/build/$ABI
+          cd $WORK
+          
+          # 克隆 OpenFST
+          if [ ! -d openfst ]; then
+            git clone https://github.com/alphacep/openfst
+          fi
+          cd openfst
+          
+          # 设置编译器变量
+          case "$ABI" in
+            arm64-v8a) 
+              HOST=aarch64-linux-android
+              CXX=aarch64-linux-android21-clang++
+              ARCHFLAGS=""
+              ;;
+            armeabi-v7a) 
+              HOST=arm-linux-androideabi
+              CXX=armv7a-linux-androideabi21-clang++
+              ARCHFLAGS="-mfloat-abi=softfp -mfpu=neon"
+              ;;
+            x86) 
+              HOST=i686-linux-android
+              CXX=i686-linux-android21-clang++
+              ARCHFLAGS=""
+              ;;
+            x86_64) 
+              HOST=x86_64-linux-android
+              CXX=x86_64-linux-android21-clang++
+              ARCHFLAGS=""
+              ;;
+          esac
+          
+          autoreconf -i
+          CXX=$CXX CXXFLAGS="$ARCHFLAGS -O3 -DFST_NO_DYNAMIC_LINKING" ./configure --prefix=${WORK}/local \
+            --enable-shared --enable-static --with-pic --disable-bin \
+            --enable-lookahead-fsts --enable-ngram-fsts --host=$HOST --build=x86-linux-gnu
+          make -j 8
+          make install
+
+      - name: Build Kaldi
+        run: |
+          set -euxo pipefail
+          ABI=${{ matrix.abi }}
+          WORK=$GITHUB_WORKSPACE/android/lib/build/$ABI
+          cd $WORK
+          
+          # 克隆 Kaldi
+          if [ ! -d kaldi ]; then
+            git clone -b vosk-android --single-branch https://github.com/alphacep/kaldi
+          fi
+          
+          # 设置编译器变量
+          case "$ABI" in
+            arm64-v8a) 
+              HOST=aarch64-linux-android
+              CXX=aarch64-linux-android21-clang++
+              ARCHFLAGS=""
+              ;;
+            armeabi-v7a) 
+              HOST=arm-linux-androideabi
+              CXX=armv7a-linux-androideabi21-clang++
+              ARCHFLAGS="-mfloat-abi=softfp -mfpu=neon"
+              ;;
+            x86) 
+              HOST=i686-linux-android
+              CXX=i686-linux-android21-clang++
+              ARCHFLAGS=""
+              ;;
+            x86_64) 
+              HOST=x86_64-linux-android
+              CXX=x86_64-linux-android21-clang++
+              ARCHFLAGS=""
+              ;;
+          esac
+          
+          cd $WORK/kaldi/src
+          CXX=$CXX AR=llvm-ar RANLIB=llvm-ranlib CXXFLAGS="$ARCHFLAGS -O3 -DFST_NO_DYNAMIC_LINKING" ./configure --use-cuda=no \
+            --mathlib=OPENBLAS_CLAPACK --shared \
+            --android-incdir=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include \
+            --host=$HOST --openblas-root=${WORK}/local \
+            --fst-root=${WORK}/local --fst-version=1.8.0
+          make -j 8 depend
+          make -j 8 online2 rnnlm
+
+      - name: Build Vosk
+        run: |
+          set -euxo pipefail
+          ABI=${{ matrix.abi }}
+          WORK=$GITHUB_WORKSPACE/android/lib/build/$ABI
+          cd $WORK
+          
+          # 设置编译器变量
+          case "$ABI" in
+            arm64-v8a) 
+              CXX=aarch64-linux-android21-clang++
+              PAGESIZE_LDFLAGS="-Wl,-z,common-page-size=4096 -Wl,-z,max-page-size=16384"
+              ;;
+            armeabi-v7a) 
+              CXX=armv7a-linux-androideabi21-clang++
+              PAGESIZE_LDFLAGS=""
+              ;;
+            x86) 
+              CXX=i686-linux-android21-clang++
+              PAGESIZE_LDFLAGS=""
+              ;;
+            x86_64) 
+              CXX=x86_64-linux-android21-clang++
+              PAGESIZE_LDFLAGS=""
+              ;;
+          esac
+          
+          mkdir -p $WORK/vosk
+          make -j 8 -C $GITHUB_WORKSPACE/src \
+            OUTDIR=$WORK/vosk \
+            KALDI_ROOT=${WORK}/kaldi \
+            OPENFST_ROOT=${WORK}/local \
+            OPENBLAS_ROOT=${WORK}/local \
+            CXX=$CXX \
+            EXTRA_LDFLAGS="-llog -static-libstdc++ -Wl,-soname,libvosk.so ${PAGESIZE_LDFLAGS}"
+          
+          # 复制到 JNI 目录
+          mkdir -p $GITHUB_WORKSPACE/android/lib/src/main/jniLibs/$ABI
+          cp $WORK/vosk/libvosk.so $GITHUB_WORKSPACE/android/lib/src/main/jniLibs/$ABI/libvosk.so
+
+      - name: Verify Build Output
+        run: |
+          ABI=${{ matrix.abi }}
+          echo "==== $ABI Vosk Library ===="
+          ls -lh $GITHUB_WORKSPACE/android/lib/src/main/jniLibs/$ABI/
+          file $GITHUB_WORKSPACE/android/lib/src/main/jniLibs/$ABI/libvosk.so || true
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vosk-android-${{ matrix.abi }}
+          path: ${{ github.workspace }}/android/lib/src/main/jniLibs/${{ matrix.abi }}/
+
+  package-aar:
+    runs-on: ubuntu-latest
+    needs: build-android
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          
+      - name: Copy .so files to jniLibs
+        run: |
+          set -euxo pipefail
+          # 复制所有架构的 .so 文件到正确位置
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            mkdir -p android/lib/src/main/jniLibs/$abi
+            if [ -f artifacts/vosk-android-$abi/libvosk.so ]; then
+              cp artifacts/vosk-android-$abi/libvosk.so android/lib/src/main/jniLibs/$abi/
+            fi
+          done
+          
+          # 显示文件结构
+          echo "==== Final jniLibs structure ===="
+          find android/lib/src/main/jniLibs -name "*.so" -exec ls -lh {} \;
+          
+      - name: Build AAR
+        run: |
+          cd android
+          ./gradlew :lib:assembleRelease
+          
+      - name: Verify AAR
+        run: |
+          echo "==== Generated AAR files ===="
+          find android -name "*.aar" -exec ls -lh {} \;
+          
+          # 检查 AAR 内容
+          cd android/lib/build/outputs/aar
+          unzip -l *.aar | head -20
+          
+      - name: Upload AAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: vosk-android-aar
+          path: android/lib/build/outputs/aar/*.aar
