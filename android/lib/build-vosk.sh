@@ -87,6 +87,7 @@ cd $WORKDIR
 git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
 
 # 使用 CMake 构建 OpenBLAS 以避免兼容性问题
+# 禁用复数支持以避免 zgemm3m 相关编译错误
 cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
   -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
@@ -99,7 +100,11 @@ cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$WORKDIR/local" \
   -DBUILD_TESTING=OFF \
-  -DNO_CBLAS=ON
+  -DNO_CBLAS=ON \
+  -DBUILD_SINGLE=ON \
+  -DBUILD_DOUBLE=ON \
+  -DBUILD_COMPLEX=OFF \
+  -DBUILD_COMPLEX16=OFF
 
 ninja -C "$WORKDIR/openblas-build" -j 8
 ninja -C "$WORKDIR/openblas-build" install
