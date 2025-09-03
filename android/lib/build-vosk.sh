@@ -99,8 +99,7 @@ cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$WORKDIR/local" \
   -DBUILD_TESTING=OFF \
-  -DUTEST=OFF \
-  -DONLY_CBLAS=1
+  -DNO_CBLAS=ON
 
 ninja -C "$WORKDIR/openblas-build" -j 8
 ninja -C "$WORKDIR/openblas-build" install
