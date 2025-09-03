@@ -29,9 +29,11 @@ cmake_install.cmake
 wheelhouse
 __pycache__
 *.egg-info
+.eggs/
 python/dist
 python/build
 python/vosk/*.so
+python/vosk/vosk_cffi.py
 python/test/db
 python/test/hyp
 python/test/model
