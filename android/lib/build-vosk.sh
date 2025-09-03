@@ -86,6 +86,21 @@ mkdir -p $WORKDIR/local/lib
 cd $WORKDIR
 git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
 
+# 修复 OpenBLAS 编译问题
+cd OpenBLAS
+
+# 修复 test_dotu.c 中缺少的 complex.h 头文件
+if [ -f utest/test_dotu.c ] && ! grep -q "#include <complex.h>" utest/test_dotu.c; then
+  sed -i '1i#include <complex.h>' utest/test_dotu.c
+fi
+
+# 禁用 utest 目录的编译
+if [ -f CMakeLists.txt ] && grep -q "add_subdirectory(utest)" CMakeLists.txt; then
+  sed -i 's/add_subdirectory(utest)/#add_subdirectory(utest)/' CMakeLists.txt
+fi
+
+cd ..
+
 # 使用 CMake 构建 OpenBLAS 以避免兼容性问题
 cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
   -G Ninja \
@@ -99,6 +114,7 @@ cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$WORKDIR/local" \
   -DBUILD_TESTING=OFF \
+  -DNO_CBLAS=ON \
   -DUSE_THREAD=0 \
   -DNUM_THREADS=1
 
