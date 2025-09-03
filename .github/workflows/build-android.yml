@@ -52,9 +52,16 @@ jobs:
             sed -i '1i#include <complex.h>' utest/test_dotu.c
           fi
           
-          # 禁用 utest 目录的编译
+          # 禁用 utest 目录的编译以避免单元测试编译错误
           if [ -f CMakeLists.txt ] && grep -q "add_subdirectory(utest)" CMakeLists.txt; then
             sed -i 's/add_subdirectory(utest)/#add_subdirectory(utest)/' CMakeLists.txt
+          fi
+          
+          # 修复 DTB_DEFAULT_ENTRIES 未定义的问题
+          if [ -f param.h ] && ! grep -q "DTB_DEFAULT_ENTRIES" param.h; then
+            echo "#ifndef DTB_DEFAULT_ENTRIES" >> param.h
+            echo "#define DTB_DEFAULT_ENTRIES 256" >> param.h
+            echo "#endif" >> param.h
           fi
           
           cd ..
