@@ -182,6 +182,9 @@ void Recognizer::CleanUp()
             delete spk_feature_;
             spk_feature_ = new OnlineMfcc(spk_model_->spkvector_mfcc_opts);
         }
+        
+        // Reset state to initialized after full reinitialization
+        state_ = RECOGNIZER_INITIALIZED;
     } else {
         decoder_->InitDecoding(frame_offset_);
     }
