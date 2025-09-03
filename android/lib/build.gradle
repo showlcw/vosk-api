@@ -28,7 +28,7 @@ dependencies {
     api 'net.java.dev.jna:jna:5.13.0@aar'
 }
 
-//preBuild.dependsOn buildVosk
+preBuild.dependsOn buildVosk
 
 mavenPublishing {
     coordinates("com.alphacephei", archiveName, version)

@@ -59,7 +59,7 @@ case $arch in
           PAGESIZE_LDFLAGS="-Wl,-z,common-page-size=4096 -Wl,-z,max-page-size=16384"
           ;;
     x86_64)
-          BLAS_ARCH=ATOM
+          BLAS_ARCH=NEHALEM
           HOST=x86_64-linux-android
           AR=llvm-ar
           RANLIB=llvm-ranlib
@@ -85,8 +85,24 @@ mkdir -p $WORKDIR/local/lib
 # openblas first
 cd $WORKDIR
 git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
-make -C OpenBLAS TARGET=$BLAS_ARCH ONLY_CBLAS=1 AR=$AR CC=$CC HOSTCC=gcc ARM_SOFTFP_ABI=1 USE_THREAD=0 NUM_THREADS=1 -j 8
-make -C OpenBLAS install PREFIX=$WORKDIR/local
+
+# 使用 CMake 构建 OpenBLAS 以避免兼容性问题
+cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
+  -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=$arch \
+  -DANDROID_PLATFORM=21 \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DNOFORTRAN=ON \
+  -DDYNAMIC_ARCH=OFF \
+  -DTARGET=$BLAS_ARCH \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX="$WORKDIR/local" \
+  -DBUILD_TESTING=OFF \
+  -DNO_CBLAS=ON
+
+ninja -C "$WORKDIR/openblas-build" -j 8
+ninja -C "$WORKDIR/openblas-build" install
 
 # CLAPACK
 cd $WORKDIR
