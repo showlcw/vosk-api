@@ -34,6 +34,13 @@ jobs:
           
           # Add NDK toolchain to PATH
           echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+          
+          # Verify NDK setup
+          echo "=== NDK Environment ==="
+          echo "ANDROID_NDK_HOME: $ANDROID_NDK_HOME"
+          ls -la "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/" | head -10
+          echo "Available compilers:"
+          ls -1 "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/"*clang* | head -10
 
       - name: Build OpenBLAS
         run: |
@@ -42,9 +49,9 @@ jobs:
           WORK=$GITHUB_WORKSPACE/android/lib/build/$ABI
           cd $WORK
 
-          # 克隆 OpenBLAS
+          # 克隆 OpenBLAS - try a more stable version
           if [ ! -d OpenBLAS ]; then
-            git clone -b v0.3.21 --single-branch https://github.com/xianyi/OpenBLAS
+            git clone -b v0.3.23 --single-branch https://github.com/xianyi/OpenBLAS
           fi
 
           # ABI 对应 TARGET
@@ -55,6 +62,8 @@ jobs:
             x86_64) TARGET=NEHALEM ;;
           esac
 
+          echo "=== Building OpenBLAS for $ABI (TARGET=$TARGET) ==="
+          
           # 使用 CMAKE 但配置 NO_CBLAS=ON 以避免utest编译问题
           cmake -S "$WORK/OpenBLAS" -B "$WORK/openblas-build" \
             -G Ninja \
@@ -70,9 +79,10 @@ jobs:
             -DBUILD_TESTING=OFF \
             -DNO_CBLAS=ON \
             -DNO_LAPACK=ON \
-            -DNO_LAPACKE=ON
+            -DNO_LAPACKE=ON \
+            -DONLY_CBLAS=OFF
 
-          ninja -C "$WORK/openblas-build" -j8
+          ninja -C "$WORK/openblas-build" -j4
           ninja -C "$WORK/openblas-build" install
 
       - name: Verify OpenBLAS
@@ -119,15 +129,22 @@ jobs:
               ;;
           esac
           
+          echo "=== Building CLAPACK for $ABI ==="
+          echo "HOST: $HOST"
+          echo "CC: $CC"
+          echo "ARCHFLAGS: $ARCHFLAGS"
+          echo "Checking compiler exists:"
+          ls -la "$CC" || echo "Compiler not found!"
+          
           mkdir -p clapack/BUILD && cd clapack/BUILD
           cmake -DCMAKE_C_FLAGS="$ARCHFLAGS" -DCMAKE_C_COMPILER_TARGET=$HOST \
             -DCMAKE_C_COMPILER=$CC -DCMAKE_SYSTEM_NAME=Generic \
             -DCMAKE_AR=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar \
             -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
             -DCMAKE_CROSSCOMPILING=True ..
-          make -j 8 -C F2CLIBS/libf2c
-          make -j 8 -C BLAS/SRC  
-          make -j 8 -C SRC
+          make -j 4 -C F2CLIBS/libf2c
+          make -j 4 -C BLAS/SRC  
+          make -j 4 -C SRC
           find . -name "*.a" | xargs cp -t $WORK/local/lib
 
       - name: Build OpenFST
@@ -171,7 +188,7 @@ jobs:
           CXX=$CXX CXXFLAGS="$ARCHFLAGS -O3 -DFST_NO_DYNAMIC_LINKING" ./configure --prefix=${WORK}/local \
             --enable-shared --enable-static --with-pic --disable-bin \
             --enable-lookahead-fsts --enable-ngram-fsts --host=$HOST --build=x86-linux-gnu
-          make -j 8
+          make -j 4
           make install
 
       - name: Build Kaldi
@@ -216,8 +233,8 @@ jobs:
             --android-incdir=${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include \
             --host=$HOST --openblas-root=${WORK}/local \
             --fst-root=${WORK}/local --fst-version=1.8.0
-          make -j 8 depend
-          make -j 8 online2 rnnlm
+          make -j 4 depend
+          make -j 4 online2 rnnlm
 
       - name: Build Vosk
         run: |
@@ -247,7 +264,7 @@ jobs:
           esac
           
           mkdir -p $WORK/vosk
-          make -j 8 -C $GITHUB_WORKSPACE/src \
+          make -j 4 -C $GITHUB_WORKSPACE/src \
             OUTDIR=$WORK/vosk \
             KALDI_ROOT=${WORK}/kaldi \
             OPENFST_ROOT=${WORK}/local \
