@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        abi: [arm64-v8a, armeabi-v7a, x86, x86_64]
+        abi: [arm64-v8a, armeabi-v7a]  # 暂时只构建ARM架构
 
     steps:
       - name: Checkout
@@ -48,23 +48,10 @@ jobs:
           case "$ABI" in
             arm64-v8a) TARGET=ARMV8 ;;
             armeabi-v7a) TARGET=ARMV7 ;;
-            x86) TARGET=GENERIC ;;
-            x86_64) TARGET=GENERIC ;;
           esac
 
-          # 创建一个简单的patch来修复DTB_DEFAULT_ENTRIES问题
-          cd $WORK/OpenBLAS
-          
-          # 为x86架构添加DTB_DEFAULT_ENTRIES定义
-          if [[ "$ABI" == "x86" || "$ABI" == "x86_64" ]]; then
-            find kernel -name "*.c" -exec grep -l "DTB_DEFAULT_ENTRIES" {} \; | while read file; do
-              if ! grep -q "#ifndef DTB_DEFAULT_ENTRIES" "$file"; then
-                sed -i '1i#ifndef DTB_DEFAULT_ENTRIES\n#define DTB_DEFAULT_ENTRIES 8\n#endif\n' "$file"
-              fi
-            done
-          fi
-
-          # 使用 CMAKE 配置，但使用更简单的选项
+          echo "Building OpenBLAS for ARM architecture using CMake..."
+          # 使用 CMAKE 配置，ARM 架构
           cmake -S "$WORK/OpenBLAS" -B "$WORK/openblas-build" \
             -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
@@ -79,9 +66,7 @@ jobs:
             -DBUILD_TESTING=OFF \
             -DNO_CBLAS=ON \
             -DNO_LAPACK=ON \
-            -DNO_LAPACKE=ON \
-            -DCMAKE_C_FLAGS="-DDTB_DEFAULT_ENTRIES=8" \
-            -DCMAKE_CXX_FLAGS="-DDTB_DEFAULT_ENTRIES=8"
+            -DNO_LAPACKE=ON
 
           ninja -C "$WORK/openblas-build" -j8
           ninja -C "$WORK/openblas-build" install
@@ -305,8 +290,8 @@ jobs:
       - name: Copy .so files to jniLibs
         run: |
           set -euxo pipefail
-          # 复制所有架构的 .so 文件到正确位置
-          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+          # 复制ARM架构的 .so 文件到正确位置
+          for abi in arm64-v8a armeabi-v7a; do
             mkdir -p android/lib/src/main/jniLibs/$abi
             if [ -f artifacts/vosk-android-$abi/libvosk.so ]; then
               cp artifacts/vosk-android-$abi/libvosk.so android/lib/src/main/jniLibs/$abi/

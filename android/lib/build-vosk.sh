@@ -32,7 +32,7 @@ WORKDIR_BASE=`pwd`/build
 PATH=$ANDROID_TOOLCHAIN_PATH/bin:$PATH
 OPENFST_VERSION=1.8.0
 
-for arch in armeabi-v7a arm64-v8a x86_64 x86; do
+for arch in armeabi-v7a arm64-v8a; do
 
 WORKDIR=${WORKDIR_BASE}/kaldi_${arch}
 
@@ -90,18 +90,7 @@ mkdir -p $WORKDIR/local/lib
 cd $WORKDIR
 git clone -b v0.3.20 --single-branch https://github.com/xianyi/OpenBLAS
 
-# 创建一个简单的patch来修复DTB_DEFAULT_ENTRIES问题
-cd $WORKDIR/OpenBLAS
-
-# 为x86架构添加DTB_DEFAULT_ENTRIES定义
-if [[ "$arch" == "x86" || "$arch" == "x86_64" ]]; then
-  find kernel -name "*.c" -exec grep -l "DTB_DEFAULT_ENTRIES" {} \; | while read file; do
-    if ! grep -q "#ifndef DTB_DEFAULT_ENTRIES" "$file"; then
-      sed -i '1i#ifndef DTB_DEFAULT_ENTRIES\n#define DTB_DEFAULT_ENTRIES 8\n#endif\n' "$file"
-    fi
-  done
-fi
-
+echo "Building OpenBLAS for ARM architecture using CMake..."
 # 使用 CMake 构建 OpenBLAS 以避免兼容性问题
 cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
   -G Ninja \
@@ -117,9 +106,7 @@ cmake -S "$WORKDIR/OpenBLAS" -B "$WORKDIR/openblas-build" \
   -DBUILD_TESTING=OFF \
   -DNO_CBLAS=ON \
   -DNO_LAPACK=ON \
-  -DNO_LAPACKE=ON \
-  -DCMAKE_C_FLAGS="-DDTB_DEFAULT_ENTRIES=8" \
-  -DCMAKE_CXX_FLAGS="-DDTB_DEFAULT_ENTRIES=8"
+  -DNO_LAPACKE=ON
 
 ninja -C "$WORKDIR/openblas-build" -j 8
 ninja -C "$WORKDIR/openblas-build" install
