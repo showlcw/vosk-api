@@ -39,7 +39,7 @@ else
 fi
 
 # Check NDK compilers for each architecture
-ARCHITECTURES="arm64-v8a armeabi-v7a x86_64 x86"
+ARCHITECTURES="arm64-v8a armeabi-v7a"
 TOOLCHAIN_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
 
 for arch in $ARCHITECTURES; do
